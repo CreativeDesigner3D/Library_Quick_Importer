@@ -1,5 +1,6 @@
-import bpy,os,inspect
+import bpy,os,inspect,codecs,subprocess
 from bpy_extras.io_utils import ImportHelper
+import math
 
 from bpy.types import (Header, 
                        Menu, 
@@ -15,9 +16,12 @@ from bpy.props import (StringProperty,
                        PointerProperty,
                        EnumProperty,
                        CollectionProperty)
+
+from .dxfimport.do import Do, Indicator
 from . import qi_utils
 from .pc_lib import pc_utils
 
+MATERIAL_PATH = os.path.join(os.path.dirname(__file__),'material_preset.blend')
 
 class qi_OT_activate(Operator):
     bl_idname = "qi.activate"
@@ -62,6 +66,9 @@ class qi_OT_drop(Operator):
         elif ext in {'.png','.jpg','.jpeg'}:
             bpy.ops.qiimport_image.to_plane(filepath=self.filepath)
             bpy.ops.qi.place_asset()
+        elif ext in {'.dxf'}:
+            bpy.ops.qi.dxf(filepath=self.filepath)
+            bpy.ops.qi.place_asset()            
         else:
             pass
 
@@ -86,6 +93,85 @@ class qi_OT_set_active_path(Operator, ImportHelper):
     def execute(self, context):
         props = qi_utils.get_scene_props(context.scene)
         props.active_path = self.directory
+        return {'FINISHED'}
+
+
+class qi_OT_set_output_path(Operator, ImportHelper):
+    """Set Active Path"""
+    bl_idname = 'qi.set_output_path'
+    bl_label = 'Set Active Path'
+
+    directory: bpy.props.StringProperty(name="Directory",subtype='DIR_PATH')
+    current_path: bpy.props.StringProperty(name="Directory",subtype='DIR_PATH')
+
+    def draw(self, context):
+        layout = self.layout
+
+    def invoke(self, context, event):
+        self.current_path = qi_utils.get_scene_props(context.scene).active_path
+        wm = context.window_manager
+        wm.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def create_save_dxf_script(self,dxf_filepath,output_filepath):
+        file = codecs.open(os.path.join(bpy.app.tempdir,"thumb_temp.py"),'w',encoding='utf-8')
+        file.write("import bpy\n")
+        file.write("for obj in bpy.data.objects:\n")
+        file.write("    bpy.data.objects.remove(obj,do_unlink=True)\n")           
+        file.write("bpy.ops.qi.dxf(filepath=r'" + dxf_filepath + "')\n")
+        file.write("bpy.ops.wm.save_as_mainfile(filepath=r'" + output_filepath + ".blend')\n")
+
+        file.write("with bpy.data.libraries.load(r'" + MATERIAL_PATH + "', False, True) as (data_from, data_to):\n")
+        file.write("    data_to.materials = data_from.materials\n")
+        file.write("material = None\n")
+        file.write("for mat in data_to.materials:\n")
+        file.write("    material = mat\n")
+
+        file.write("obj_list = []\n")
+        file.write("for obj in bpy.data.objects:\n")
+        file.write("    if obj.type == 'CURVE':\n")
+        file.write("        obj.data.extrude = .01\n")
+        file.write("        obj.data.bevel_depth = .005\n")
+        file.write("    obj_list.append(obj)\n")
+        file.write("bpy.ops.object.camera_add()\n")
+        file.write("bpy.context.scene.camera = bpy.context.object\n")
+        file.write("bpy.context.scene.camera.rotation_euler = (0,0,0)\n")
+        file.write("bpy.ops.object.select_all(action='DESELECT')\n")
+        file.write("for obj in obj_list:\n")
+        file.write("    bpy.context.view_layer.objects.active = obj\n")
+        file.write("    bpy.ops.object.material_slot_add()\n")
+        file.write("    for slot in obj.material_slots:\n")     
+        file.write("        slot.material = material\n")   
+        file.write("    obj.select_set(True)\n")
+        file.write("bpy.ops.view3d.camera_to_view_selected()\n")
+        file.write("render = bpy.context.scene.render\n")
+        file.write("render.use_file_extension = True\n")        
+        file.write("render.resolution_x = 540\n")     
+        file.write("render.resolution_y = 540\n") 
+        file.write("render.filepath = r'" + output_filepath + "'\n")
+        file.write("bpy.ops.render.render(write_still=True)\n")
+        file.write("bpy.ops.wm.save_as_mainfile(filepath=r'" + output_filepath + "TEST.blend')\n")
+
+        file.close() 
+        
+        return os.path.join(bpy.app.tempdir,'thumb_temp.py')
+
+    def save_dxf_file(self,dxf_filepath):
+        dxf_filename = os.path.basename(dxf_filepath)
+        filename, ext = os.path.splitext(dxf_filename)
+        
+        save_script_path = self.create_save_dxf_script(dxf_filepath, os.path.join(self.directory,filename))
+        subprocess.call(bpy.app.binary_path + ' -b --python "' + save_script_path + '"')
+
+    def execute(self, context):
+        if not os.path.exists(self.current_path):
+            return {'CANCELLED'}
+
+        for f in os.listdir(self.current_path):
+            filename, ext = os.path.splitext(f)
+            if ext == '.dxf':
+                self.save_dxf_file(os.path.join(self.current_path,f))
+
         return {'FINISHED'}
 
 
@@ -136,6 +222,35 @@ class qi_OT_create_previews(Operator):
         #Create Render based on templates
         #Save to Same Directory In Previews Folder
         #Set file path to new directory
+
+        return {'FINISHED'}
+
+class qi_ImportDXF(Operator, ImportHelper):
+    """Load a dxf file"""
+    bl_idname = 'qi.dxf'
+    bl_label = 'Import DXF File'
+
+    filepath: StringProperty(name='Library Name')
+
+    def execute(self, context):
+        current_obj_list = []
+        for obj in bpy.data.objects:    
+            current_obj_list.append(obj)
+
+        do = Do(self.filepath, c=0, import_text=True, import_light=True, export_acis=True, merge_lines=True, do_bbox=True, block_rep=4, recenter=False,
+                pDXF=None, pScene=None,thicknessWidth=True,but_group_by_att=True,dxf_unit_scale=.02)     
+        errors = do.entities(os.path.basename(self.filepath).replace(".dxf", ""), None)    
+        
+        new_obj_list = []
+        for obj in bpy.data.objects:    
+            if obj not in current_obj_list:
+                new_obj_list.append(obj)
+
+        bpy.ops.object.select_all(action='DESELECT')
+
+        for obj in new_obj_list:
+            context.view_layer.objects.active = obj
+            obj.select_set(True)
 
         return {'FINISHED'}
 
@@ -288,6 +403,10 @@ class qi_OT_place_asset(bpy.types.Operator):
                 self.obj.rotation_euler.z += .1
             else:
                 self.obj.rotation_euler.z -= .1
+        elif event.type == 'LEFT_ARROW' and event.value == 'PRESS':
+            self.obj.rotation_euler.z += math.radians(90)
+        elif event.type == 'RIGHT_ARROW' and event.value == 'PRESS':
+            self.obj.rotation_euler.z -= math.radians(90)            
         else:
             self.position_object(selected_point,selected_obj)
 
@@ -325,11 +444,13 @@ class qi_OT_place_asset(bpy.types.Operator):
 classes = (
     qi_OT_activate,
     qi_OT_drop,
+    qi_OT_set_output_path,
     qi_OT_set_active_path,
     qi_OT_change_library_path,
     qi_OT_save_active_path,
     qi_OT_create_previews,
     qi_ImportGLTF2,
+    qi_ImportDXF,
     qi_OT_place_asset,
 )
 

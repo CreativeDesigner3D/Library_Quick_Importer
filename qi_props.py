@@ -326,6 +326,7 @@ class qi_Scene_Props(PropertyGroup):
             row.scale_y = 1.3
             row.menu('QI_MT_saved_paths',text="Select Saved Path",icon='FILEBROWSER') 
             row.operator('qi.save_active_path',text="",icon='ADD') 
+            row.operator('qi.set_output_path',text="",icon='EXPORT') 
 
         # if os.path.exists(self.active_path):
         #     row = layout.row(align=True)
