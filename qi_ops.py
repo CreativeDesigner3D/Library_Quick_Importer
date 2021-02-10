@@ -161,7 +161,7 @@ class qi_OT_set_output_path(Operator, ImportHelper):
         filename, ext = os.path.splitext(dxf_filename)
         
         save_script_path = self.create_save_dxf_script(dxf_filepath, os.path.join(self.directory,filename))
-        subprocess.call(bpy.app.binary_path + ' -b --python "' + save_script_path + '"')
+        subprocess.call(bpy.app.binary_path + ' -b --python "' + save_script_path + '"',shell=True)
 
     def execute(self, context):
         if not os.path.exists(self.current_path):
