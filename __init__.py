@@ -24,6 +24,7 @@ def load_library_on_file_load(scene=None):
     pc_utils.register_library(name="Quick Importer",
                               activate_id='qi.activate',
                               drop_id='qi.drop',
+                              namespace="qi",
                               icon='IMPORT')
 
 #Standard register/unregister Function for Blender Add-ons
@@ -33,6 +34,7 @@ def register():
     qi_ui.register()
     io_import_images_as_planes.register()
 
+    load_library_on_file_load()
     bpy.app.handlers.load_post.append(load_library_on_file_load)
 
 def unregister():

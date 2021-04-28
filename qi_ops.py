@@ -66,6 +66,8 @@ class qi_OT_drop(Operator):
         elif ext in {'.png','.jpg','.jpeg'}:
             bpy.ops.qiimport_image.to_plane(filepath=self.filepath)
             bpy.ops.qi.place_asset()
+        elif ext in {'.stl'}:
+            pass
         elif ext in {'.dxf'}:
             bpy.ops.qi.dxf(filepath=self.filepath)
             bpy.ops.qi.place_asset()            

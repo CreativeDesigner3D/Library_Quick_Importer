@@ -306,7 +306,7 @@ class qi_Scene_Props(PropertyGroup):
         if self.library_tabs == 'OBJ':
             pass #TODO
 
-    def draw(self,layout,context):
+    def draw_filebrowser_header(self,layout,context):
         row = layout.row()
         row.scale_y = 1.3
         row.label(text="Quick Importer V0.1")
@@ -328,11 +328,6 @@ class qi_Scene_Props(PropertyGroup):
             row.operator('qi.save_active_path',text="",icon='ADD') 
             row.operator('qi.set_output_path',text="",icon='EXPORT') 
 
-        # if os.path.exists(self.active_path):
-        #     row = layout.row(align=True)
-        #     row.scale_y = 1.3
-        #     row.operator('qi.create_previews',text="Render Scenes",icon='FILE_IMAGE')
-            
     @classmethod
     def register(cls):
         bpy.types.Scene.qi = PointerProperty(
