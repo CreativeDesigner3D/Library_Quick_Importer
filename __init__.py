@@ -38,12 +38,14 @@ def register():
     bpy.app.handlers.load_post.append(load_library_on_file_load)
 
 def unregister():
-    qi_ops.unregister()
-    qi_props.unregister()
-    qi_ui.unregister()
-    io_import_images_as_planes.unregister()
+    try:
+        qi_ops.unregister()
+        qi_props.unregister()
+        qi_ui.unregister()
+        io_import_images_as_planes.unregister()
 
-    bpy.app.handlers.load_post.remove(load_library_on_file_load)  
+        bpy.app.handlers.load_post.remove(load_library_on_file_load)  
 
-    pc_utils.unregister_library("Quick Importer")
-
+        pc_utils.unregister_library("Quick Importer")
+    except:
+        pass
